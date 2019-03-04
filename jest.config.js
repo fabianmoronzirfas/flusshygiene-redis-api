@@ -10,6 +10,8 @@ module.exports = {
   "text-summary"],
   "collectCoverageFrom": [
     "src/**/*.{ts,tsx}",
+    "!src/index.ts",
+    "!src/lib/server.ts",
     "!**/node_modules/**",
     "!**/build/**",
     "!**/coverage/**"],

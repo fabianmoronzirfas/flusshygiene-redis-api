@@ -27,7 +27,7 @@ function getAllHashTables(response: Response, matches: any[]) {
       }
       results.push({key, data: object});
       if (i === matches.length - 1) {
-        response.json(results);
+        response.status(201).json(results);
       }
     });
   });
@@ -117,18 +117,22 @@ router.get('/read/:id', async (request, response) => {
 
 router.post('/write', (request, response) => {
   // new elememt
-  redisClient.hset(id, 'body', request.body);
-  response.send(request.url);
+  redisClient.hset(id, 'body', JSON.stringify(request.body));
+  response.status(201).json(request.body);
 });
 
 router.post('/patch/:id', (request, response) => {
   // update specific element
-  response.send(request.url);
+  response.status(201).json(request.body);
 });
+
+
 router.post('/remove/:id', (request, response) => {
   // remove specifc element
-  response.send(request.url);
+  response.status(201).send(request.body);
 });
+
+
 router.post('/find', (request, response) => {
   // get all elements
   // logger(`requeest body :\n ${JSON.stringify(request.body)}`);
