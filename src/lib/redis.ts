@@ -1,9 +1,8 @@
 
 import redis, {ClientOpts} from 'redis';
-// import redisCommands from 'redis-commands';
-// import util from 'util';
-
 import logger from './utils/logger';
+
+export const defaultTopics: string[] = ['read', 'write'];
 let nodeDevInDocker: boolean = false;
 
 if (process.env.NODE_DOCKER_ENV === '1') {
@@ -16,52 +15,56 @@ if (process.env.NODE_DOCKER_ENV === '1') {
    logger('"process.env.NODE_DOCKER_ENV" is not defined What is your env?');
  }
 
-const options: ClientOpts = {
+export const retry_strategy = () => 1000;
+
+export const rdsOptions: ClientOpts = {
   host: nodeDevInDocker === true ? process.env.REDIS_HOST : '127.0.0.1',
   port: process.env.REDIS_PORT === undefined ? 6379 : process.env.REDIS_PORT as unknown as number,
-  retry_strategy: () => 1000,
+  retry_strategy: retry_strategy,
 };
 export default class RDS {
   public static redisClient: redis.RedisClient;
   public static redisSubscribeClient: redis.RedisClient;
-
-  public static getInstances() {
+  public static topics: string[];
+  public static getInstances(additionalTopics?: string[]) {
     if (!this.redisClient) {
       // this.promisify(redis.RedisClient.prototype, redisCommands.list);
       // this.promisify(redis.Multi.prototype, ['exec', 'execAtomic']);
-      this.redisClient = redis.createClient(options);
+      this.redisClient = redis.createClient(rdsOptions);
       if (!this.redisSubscribeClient) {
         this.redisSubscribeClient = this.redisClient.duplicate();
       }
+      this.redisClient.on('connect', this.createConnectListener('redisClient'));
+      this.redisClient.on('error', this.createErrorListener('redisClient'));
+      this.redisSubscribeClient.on('error', this.createErrorListener('subClient'));
+      this.redisSubscribeClient.on('connect', this.createConnectListener('subClient'));
+      this.redisSubscribeClient.on('message', this.createSubListener('subClient'));
     }
-    this.redisClient.on('connect', () => {
-      logger(`redisClient connected to redis`);
-  });
-    this.redisClient.on('error', (err) => {
-      logger(`redisClient Error: ${err}`);
-  });
-    this.redisSubscribeClient.on('connect', () => {
-      logger(`redisSubscribeClient connected to redis`);
+
+    if(additionalTopics !== undefined){
+      this.topics = [...defaultTopics, ...additionalTopics];
+    }else{
+      this.topics = [...defaultTopics];
+    }
+    this.topics.forEach(topic => {
+      // this.redisClient.subscribe(topic);
+      this.redisSubscribeClient.subscribe(topic);
     });
-    this.redisSubscribeClient.on('error', (err) => {
-      logger(`redisSubscribeClient Error: ${err}`);
-    });
-    this.redisSubscribeClient.on('message', (channel, message) => {
-      logger(`Redis Channel ${channel} => ${message}\n`);
-    });
-    this.redisSubscribeClient.subscribe('read');
-    this.redisSubscribeClient.subscribe('write');
     return {
       redisClient: this.redisClient,
       subClient: this.redisSubscribeClient,
     };
   }
-  // private static promisify(obj: any, methods: string[]) {
-  //   methods.forEach((method: string) => {
-  //     if (obj[method]) {
-  //       obj[method + 'Async'] = util.promisify(obj[method]);
-  //     }
-  //   });
-  // }
+  private static createErrorListener = (name: string) => (err: Error) => {
+    logger(`${name} Error: ${err}`);
+  }
+  private static createConnectListener = (name: string) => () => {
+    logger(`${name} has connected`);
+  }
+  private static createSubListener = (name: string) => (channel: string, message: string) => {
+    logger(`"${name}" on "${channel}" got "${message}"\n`);
+
+  }
+
   private constructor() {}
 }

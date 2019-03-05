@@ -12,6 +12,7 @@ module.exports = {
     "src/**/*.{ts,tsx}",
     "!src/index.ts",
     "!src/lib/server.ts",
+    "!src/lib/async-route.ts",
     "!**/node_modules/**",
     "!**/build/**",
     "!**/coverage/**"],

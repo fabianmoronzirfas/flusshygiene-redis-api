@@ -2,6 +2,7 @@ import { Request, Response, Router} from 'express';
 import RDS from './redis';
 // import uuid from 'uuid/v4';
 import logger from './utils/logger';
+import { isString } from 'util';
 // import https from 'http';
 // import asyncRoute from './async-route';
 
@@ -94,17 +95,17 @@ function hscan(request: Request, response: Response) {
 //   response.json(res);
 // };
 // const asRoute = asyncRoute(route);
-  // https.get('https://reqres.in/api/users?delay=3', (res) => {
-  //   res.setEncoding('utf8');
-  //   let body = '';
-  //   res.on('data', (data) => {
-  //     body += data;
-  //   });
-  //   res.on('end', () => {
-  //     body = JSON.parse(body);
-  //     return body;
-  //   });
-  // });
+// https.get('https://reqres.in/api/users?delay=3', (res) => {
+//   res.setEncoding('utf8');
+//   let body = '';
+//   res.on('data', (data) => {
+//     body += data;
+//   });
+//   res.on('end', () => {
+//     body = JSON.parse(body);
+//     return body;
+//   });
+// });
 // router.get('/read/:id', asRoute);
 
 router.get('/read/:id', async (request, response) => {
@@ -117,8 +118,16 @@ router.get('/read/:id', async (request, response) => {
 
 router.post('/write', (request, response) => {
   // new elememt
-  redisClient.hset(id, 'body', JSON.stringify(request.body));
-  response.status(201).json(request.body);
+  let localid = id;
+  let localdata: any = '';
+  if (request.body.id !== undefined) {
+    localid = request.body.id;
+  }
+  if (request.body.data !== undefined) {
+    localdata = request.body.data;
+  }
+  redisClient.hset(localid, 'body', JSON.stringify(localdata));
+  response.status(201).json({success: true});
 });
 
 router.post('/patch/:id', (request, response) => {
@@ -126,20 +135,33 @@ router.post('/patch/:id', (request, response) => {
   response.status(201).json(request.body);
 });
 
-
 router.post('/remove/:id', (request, response) => {
   // remove specifc element
   response.status(201).send(request.body);
 });
-
 
 router.post('/find', (request, response) => {
   // get all elements
   // logger(`requeest body :\n ${JSON.stringify(request.body)}`);
   // logger('before scan');
   scanMatches = [];
-  hscan(request, response);
+  if(request.body.hasOwnProperty('scan') !== true){
+    response.status(422).json({error: 'scan Object'});
+  }
+  if(request.body.scan.hasOwnProperty('count') !== true){
+    response.status(422).json({error: `scan.count is undefined`});
+  }
+  if(isNaN(request.body.scan.count) === true){
+    response.status(422).json({error: `scan.count should be number`});
+  }
+  if(request.body.scan.hasOwnProperty('pattern') !== true){
+      response.status(422).json({error: `scan.pattern is undefined`});
+  }
+  if(isString(request.body.scan.pattern) !== true){
+    response.status(422).json({error: `scan.pattern should be a string`});
+}
 
+  hscan(request, response);
 });
 
 // subClient.subscribe('read');

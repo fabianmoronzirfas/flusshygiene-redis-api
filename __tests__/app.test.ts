@@ -1,7 +1,9 @@
-// import http from 'http';
-// import redis from 'redis';
-import request from 'supertest';
 
+import request from 'supertest';
+jest.mock('redis', () => require('redis-mock'));
+beforeAll(()=>{
+  jest.setTimeout(10000);
+});
 import app from '../src/lib/app';
 // let rclient: redis.RedisClient;
 const payload = {key: 'value'};
@@ -11,12 +13,14 @@ beforeAll(() => {
   // rclient.hset('foo:1000', 'data', '1');
   // http.createServer(app).listen(6004);
 });
-afterAll(() => setTimeout(() => {
-  // rclient.quit();
-  process.exit();
-}, 5000));
+afterAll(() => {
+  setTimeout(() => {
+    jest.resetAllMocks();
+    process.exit();
+  }, 10000);
+});
 
-describe('default testing for server', () => {
+describe('default testing get requests', () => {
   test('should response with 200 on /', async () => {
     expect.assertions(2);
     const response = await request(app).get('/');
@@ -32,17 +36,10 @@ describe('default testing for server', () => {
     expect(response.body).toEqual({});
   });
 
-  test('route write', async () => {
-    expect.assertions(2);
-    const response = await request(app).post('/api/v1/write')
-    .send(payload)
-    .set('Accept', 'application/json')
-    .set('Content-Type', 'application/json');
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual(payload);
-  });
+});
 
-  test('route patch', async () => {
+describe('default testing post requests', () => {
+  test('route patch (reponses with payload no actual write to DB)', async () => {
     expect.assertions(2);
     // const payload = {key: 'value'};
     const response = await request(app).post('/api/v1/patch/1')
@@ -53,7 +50,7 @@ describe('default testing for server', () => {
     expect(response.body).toEqual(payload);
   });
 
-  test('route remove', async () => {
+  test('route remove (reponses with payload no actual write to DB)', async () => {
     expect.assertions(2);
     // const payload = {key: 'value'};
     const response = await request(app).post('/api/v1/remove/1')
@@ -64,8 +61,21 @@ describe('default testing for server', () => {
     expect(response.body).toEqual(payload);
   });
 
-  test('route find', async () => {
+  test('route write', async () => {
     expect.assertions(2);
+    const data = {id: 'foo:321', data: [1, 2, 3]};
+    const response = await request(app).post('/api/v1/write')
+    .send(data)
+    .set('Accept', 'application/json')
+    .set('Content-Type', 'application/json');
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({success: true});
+  });
+
+});
+describe('post find tests', ()=>{
+  test('route find', async (done) => {
+    expect.assertions(3);
     const req = {
       scan: {
         count: 1,
@@ -77,24 +87,84 @@ describe('default testing for server', () => {
     .set('Accept', 'application/json')
     .set('Content-Type', 'application/json');
     expect(response.status).toBe(201);
-    // hard to mock the redis response for now
-    // not ggod. needs some hadling of tredis setuo and so on.
-    // currewntly depends on my redis db
-    expect(response.body).toEqual([{data: {body: "{\"key\":\"value\"}", data: "1"}, key: "foo:1000"}]);
+    expect(typeof response.body[0].data).toBe('object');
+    expect(response.body).toEqual([{key: 'foo:321', data: {body: "[1,2,3]"}}]);
+    done();
   });
-  // it('should accept post', async () => {
-  //   expect.assertions(1);
-  //   const response = await request(app)
-  //     .post('/submit')
-  //     .send({foo: 'bah'});
-  //   expect(response.status).toBe(200);
-  // });
-  // it('should return the passed object', async () => {
-  //   expect.assertions(1);
-  //   const obj = {foo: 'bah'};
-  //   const response = await request(app)
-  //     .post('/submit')
-  //     .send(obj);
-  //   expect(response.text).toEqual('{"code":0,"data":{"foo":"bah"},"errors":""}');
-  // });
+
+  test('route missing scan values', async (done) => {
+    expect.assertions(2);
+    const req = {
+    };
+    const response = await request(app).post('/api/v1/find')
+    .send(req)
+    .set('Accept', 'application/json')
+    .set('Content-Type', 'application/json');
+    expect(response.status).toBe(422);
+    expect(response).toHaveProperty('error');
+    done();
+  });
+
+  test('route missing count values', async (done) => {
+    expect.assertions(2);
+    const req = {
+      scan: {
+        pattern: 'foo'
+      }
+    };
+    const response = await request(app).post('/api/v1/find')
+    .send(req)
+    .set('Accept', 'application/json')
+    .set('Content-Type', 'application/json');
+    expect(response.status).toBe(422);
+    expect(response).toHaveProperty('error');
+    done();
+  });
+  test('route missing pattern values', async (done) => {
+    expect.assertions(2);
+    const req = {
+      scan: {
+        count: 1,
+      }
+    };
+    const response = await request(app).post('/api/v1/find')
+    .send(req)
+    .set('Accept', 'application/json')
+    .set('Content-Type', 'application/json');
+    expect(response.status).toBe(422);
+    expect(response).toHaveProperty('error');
+    done();
+  });
+  test('route count value not a string', async (done) => {
+    expect.assertions(2);
+    const req = {
+      scan: {
+        count: {foo:'bah'},
+        pattern: 'test'
+      }
+    };
+    const response = await request(app).post('/api/v1/find')
+    .send(req)
+    .set('Accept', 'application/json')
+    .set('Content-Type', 'application/json');
+    expect(response.status).toBe(422);
+    expect(response).toHaveProperty('error');
+    done();
+  });
+  test('route count value not a string', async (done) => {
+    expect.assertions(2);
+    const req = {
+      scan: {
+        count: 1,
+        pattern: {foo:'bah'}
+      }
+    };
+    const response = await request(app).post('/api/v1/find')
+    .send(req)
+    .set('Accept', 'application/json')
+    .set('Content-Type', 'application/json');
+    expect(response.status).toBe(422);
+    expect(response).toHaveProperty('error');
+    done();
+  });
 });
