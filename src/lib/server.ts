@@ -1,4 +1,4 @@
-import devlogGen from '@tsb/flusshygiene-utils';
+import {devlogGen} from '@tsb/flusshygiene-utils';
 import http from 'http';
 import app from './app';
 // import RDS from './redis';
